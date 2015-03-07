@@ -79,8 +79,12 @@ end
 ark_prefix_root = node.elasticsearch[:dir] || node.ark[:prefix_root]
 ark_prefix_home = node.elasticsearch[:dir] || node.ark[:prefix_home]
 
+filename = node.elasticsearch[:filename] || "elasticsearch-#{node.elasticsearch[:version]}.tar.gz"
+download_url = node.elasticsearch[:download_url] || [node.elasticsearch[:host],
+                node.elasticsearch[:repository], filename].join('/')
+
 ark "elasticsearch" do
-  url   node.elasticsearch[:download_url]
+  url   download_url
   owner node.elasticsearch[:user]
   group node.elasticsearch[:user]
   version node.elasticsearch[:version]
@@ -113,13 +117,18 @@ bash "enable user limits" do
   not_if { ::File.read("/etc/pam.d/su").match(/^session    required   pam_limits\.so/) }
 end
 
-log "increase limits for the elasticsearch user"
-
 file "/etc/security/limits.d/10-elasticsearch.conf" do
   content <<-END.gsub(/^    /, '')
     #{node.elasticsearch.fetch(:user, "elasticsearch")}     -    nofile    #{node.elasticsearch[:limits][:nofile]}
     #{node.elasticsearch.fetch(:user, "elasticsearch")}     -    memlock   #{node.elasticsearch[:limits][:memlock]}
   END
+
+  notifies :write, 'log[increase limits]', :immediately
+end
+
+log "increase limits" do
+  message "increased limits for the elasticsearch user"
+  action :nothing
 end
 
 # Create file with ES environment variables
